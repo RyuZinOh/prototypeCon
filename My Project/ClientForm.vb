@@ -1,7 +1,7 @@
-﻿Imports System.Data.SqlClient
+Imports System.Data.SqlClient
 
 Public Class ClientForm
-    Private Const ConnectionString As String = "Server=_SABER_X\SQLEXPRESS;Database=hostvclient;Integrated Security=True;"
+    Private Const ConnectionString As String = "Data Source=192.168.1.80;Initial Catalog=hostvclient;User ID=SA;Password=MyStrongPass123;"
 
     Private Sub ClientForm_Load(sender As Object, e As EventArgs) Handles MyBase.Load
         LoadDropboxItems()
@@ -9,7 +9,7 @@ Public Class ClientForm
 
     Private Sub LoadDropboxItems()
         Using connection As New SqlConnection(ConnectionString)
-            Dim query As String = "SELECT ItemID, ItemName, Amount, Status, BoughtBy FROM Dropbox WHERE Status IS NULL"
+            Dim query As String = "SELECT ItemID, ItemName, Amount, Status FROM Dropbox WHERE Status = 'Available'"
             Using adapter As New SqlDataAdapter(query, connection)
                 Dim table As New DataTable()
                 adapter.Fill(table)
@@ -42,7 +42,7 @@ Public Class ClientForm
             Dim transaction As SqlTransaction = connection.BeginTransaction()
 
             Try
-                Dim updateQuery As String = "UPDATE Dropbox SET Status = 'Bought', BoughtBy = @BoughtBy WHERE ItemID = @ItemID AND Status IS NULL"
+                Dim updateQuery As String = "UPDATE Dropbox SET Status = 'Bought', BoughtBy = @BoughtBy WHERE ItemID = @ItemID AND Status = 'Available'"
                 Using updateCommand As New SqlCommand(updateQuery, connection, transaction)
                     updateCommand.Parameters.AddWithValue("@BoughtBy", username)
                     updateCommand.Parameters.AddWithValue("@ItemID", itemId)
@@ -51,7 +51,7 @@ Public Class ClientForm
                     If rowsAffected > 0 Then
                         Dim insertQuery As String = "INSERT INTO UserProfile (UserID, ItemID, Amount) VALUES (@UserID, @ItemID, 1)"
                         Using insertCommand As New SqlCommand(insertQuery, connection, transaction)
-                            insertCommand.Parameters.AddWithValue("@UserID", GetCurrentUserId())
+                            insertCommand.Parameters.AddWithValue("@UserID", GetCurrentUserId(username))
                             insertCommand.Parameters.AddWithValue("@ItemID", itemId)
                             insertCommand.ExecuteNonQuery()
                         End Using
@@ -59,8 +59,7 @@ Public Class ClientForm
                         transaction.Commit()
                         success = True
                     Else
-                        transaction.Rollback()
-                        MessageBox.Show("Item not found, already bought, or status is not null.")
+                        MessageBox.Show("Item not found, already bought, or status is not available.")
                     End If
                 End Using
             Catch ex As Exception
@@ -72,7 +71,19 @@ Public Class ClientForm
         Return success
     End Function
 
-    Private Function GetCurrentUserId() As Integer
-        Return 1
+    Private Function GetCurrentUserId(username As String) As Integer
+        Dim userId As Integer = 0
+        Using connection As New SqlConnection(ConnectionString)
+            Dim query As String = "SELECT id FROM Users WHERE username = @username"
+            Using command As New SqlCommand(query, connection)
+                command.Parameters.AddWithValue("@username", username)
+                connection.Open()
+                Dim result = command.ExecuteScalar()
+                If result IsNot Nothing Then
+                    userId = Convert.ToInt32(result)
+                End If
+            End Using
+        End Using
+        Return userId
     End Function
 End Class
